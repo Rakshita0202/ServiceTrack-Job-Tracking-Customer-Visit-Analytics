@@ -1,0 +1,56 @@
+# Databricks Asset Bundle configuration for ServiceTrack.
+#
+# Deploy:
+#   databricks bundle deploy -t dev
+# Run the pipeline job once:
+#   databricks bundle run servicetrack_pipeline -t dev
+#
+# Docs: https://docs.databricks.com/en/dev-tools/bundles/index.html
+
+bundle:
+  name: servicetrack
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog name
+    default: servicetrack
+  raw_data_volume_path:
+    description: Unity Catalog Volume path where raw CSV files are dropped
+    default: /Volumes/servicetrack/${bundle.target}/raw_data
+  node_type_id:
+    description: Cluster node type for the job cluster
+    default: Standard_DS3_v2
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: https://<your-workspace-instance>.azuredatabricks.net
+    variables:
+      catalog: servicetrack
+      raw_data_volume_path: /Volumes/servicetrack/dev/raw_data
+
+  staging:
+    mode: production
+    workspace:
+      host: https://<your-workspace-instance>.azuredatabricks.net
+      root_path: /Shared/.bundle/servicetrack/staging
+    variables:
+      catalog: servicetrack
+      raw_data_volume_path: /Volumes/servicetrack/staging/raw_data
+
+  prod:
+    mode: production
+    workspace:
+      host: https://<your-workspace-instance>.azuredatabricks.net
+      root_path: /Shared/.bundle/servicetrack/prod
+    permissions:
+      - level: CAN_MANAGE_RUN
+        group_name: data-engineering
+    variables:
+      catalog: servicetrack
+      raw_data_volume_path: /Volumes/servicetrack/prod/raw_data

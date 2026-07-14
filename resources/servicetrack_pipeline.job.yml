@@ -1,0 +1,108 @@
+# Databricks Workflow (Job) definition for the ServiceTrack pipeline.
+# Each notebook is its own task; Silver tasks depend on the matching Bronze
+# task, and each Gold task depends on the Silver tasks it reads from. This
+# gives correct ordering plus per-task retries and run history, instead of
+# one monolithic notebook.
+
+resources:
+  jobs:
+    servicetrack_pipeline:
+      name: "ServiceTrack: Job Tracking & Customer Visit Analytics Pipeline [${bundle.target}]"
+      schedule:
+        quartz_cron_expression: "0 0 3 * * ?" # 3:00 AM daily
+        timezone_id: "Asia/Kolkata"
+        pause_status: PAUSED # unpause once the raw data volume is wired up
+
+      email_notifications:
+        on_failure:
+          - your-team-alias@example.com
+
+      parameters:
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${bundle.target}
+        - name: raw_data_path
+          default: ${var.raw_data_volume_path}
+
+      job_clusters:
+        - job_cluster_key: servicetrack_cluster
+          new_cluster:
+            spark_version: 17.3.x-scala2.13
+            node_type_id: ${var.node_type_id}
+            num_workers: 1
+            data_security_mode: SINGLE_USER
+            autotermination_minutes: 30
+
+      tasks:
+        # ---------------- Bronze ----------------
+        - task_key: bronze_customers
+          job_cluster_key: servicetrack_cluster
+          notebook_task:
+            notebook_path: ../src/bronze/01_bronze_customers.py
+
+        - task_key: bronze_devices
+          job_cluster_key: servicetrack_cluster
+          notebook_task:
+            notebook_path: ../src/bronze/02_bronze_devices.py
+
+        - task_key: bronze_service_jobs
+          job_cluster_key: servicetrack_cluster
+          notebook_task:
+            notebook_path: ../src/bronze/03_bronze_service_jobs.py
+
+        # ---------------- Silver ----------------
+        - task_key: silver_customers
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: bronze_customers
+          notebook_task:
+            notebook_path: ../src/silver/01_silver_customers.py
+
+        - task_key: silver_devices
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: bronze_devices
+          notebook_task:
+            notebook_path: ../src/silver/02_silver_devices.py
+
+        - task_key: silver_service_jobs
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: bronze_service_jobs
+            - task_key: silver_customers
+            - task_key: silver_devices
+          notebook_task:
+            notebook_path: ../src/silver/03_silver_service_jobs.py
+
+        # ---------------- Gold ----------------
+        - task_key: gold_repair_turnaround
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: silver_service_jobs
+            - task_key: silver_devices
+          notebook_task:
+            notebook_path: ../src/gold/01_gold_repair_turnaround.py
+
+        - task_key: gold_technician_performance
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: silver_service_jobs
+          notebook_task:
+            notebook_path: ../src/gold/02_gold_technician_performance.py
+
+        - task_key: gold_repeat_customers
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: silver_service_jobs
+            - task_key: silver_customers
+          notebook_task:
+            notebook_path: ../src/gold/03_gold_repeat_customers.py
+
+        - task_key: gold_device_failure_trends
+          job_cluster_key: servicetrack_cluster
+          depends_on:
+            - task_key: silver_service_jobs
+            - task_key: silver_devices
+          notebook_task:
+            notebook_path: ../src/gold/04_gold_device_failure_trends.py

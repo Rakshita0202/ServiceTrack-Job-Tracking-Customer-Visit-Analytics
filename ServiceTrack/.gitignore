@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Databricks Asset Bundles
+.databricks/
+build/
+dist/
+
+# Spark local
+spark-warehouse/
+derby.log
+metastore_db/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
